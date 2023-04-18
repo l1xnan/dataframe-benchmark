@@ -1,0 +1,5 @@
+numpy
+pandas
+psutil
+faker
+memory_profiler
