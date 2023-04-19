@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import psutil
 from faker import Faker
 
@@ -48,7 +49,7 @@ def profile_cpu(func):
     return wrapper
 
 
-def generate_test_data(size=100000, force=False):
+def generate_test_data(size=1000000, force=False):
     if Path("test.csv").exists() and not force:
         return
     fake = Faker()
@@ -86,10 +87,14 @@ def profile(func):
         param = ",".join(args)
         if kwargs:
             param += "," + ",".join([f"{k}={v}" for k, v in kwargs.items()])
-        memory = df.memory_usage(index=False, deep=True).sum() / 1024
+        if isinstance(df, pl.DataFrame):
+            memory = "-"  # df.estimated_size("kb")
+            dtypes = "-"
+        else:
+            memory = np.round(df.memory_usage(index=False, deep=True).sum() / 1024, 3)
+            dtypes = ",".join([f"{k}({v})" for k, v in df.dtypes.value_counts().items()])
         idx = f"{func.__name__}({param})"
-        dtypes = ",".join([f"{k}({v})" for k, v in df.dtypes.value_counts().items()])
-        stats_df.loc[idx] = [np.round(total_time * 1000, 3), np.round(memory, 3), dtypes]
+        stats_df.loc[idx] = [np.round(total_time * 1000, 3), memory, dtypes]
         return df
 
     return inner
@@ -119,14 +124,21 @@ def read_parquet_by_pyarrow():
     return df
 
 
+@profile
+def read_csv_by_polars():
+    df = pl.read_csv("test.csv", use_pyarrow=True)
+    return df
+
+
 if __name__ == '__main__':
     pd.set_option("display.max_columns", None)
     pd.set_option("display.max_rows", None)
     pd.set_option("display.width", 1000)
-    pd.set_option("display.max_colwidth", 2000)
+    pd.set_option("display.max_colwidth", 30)
     generate_test_data(force=False)
     read_csv_by_python()
     read_csv_by_pyarrow()
     read_parquet_by_default()
     read_parquet_by_pyarrow()
+    read_csv_by_polars()
     print(stats_df)
