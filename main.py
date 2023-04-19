@@ -23,7 +23,6 @@ def process_cpu():
     return cpu_usage
 
 
-# decorator function mem
 def profile_mem(func):
     def wrapper(*args, **kwargs):
         mem_before = process_memory()
@@ -70,11 +69,11 @@ def generate_test_data(size=100000, force=False):
         })
 
     df = pd.DataFrame.from_records(data)
-    df.to_csv("test.csv", index=False, sep="\t")
+    df.to_csv("test.csv", index=False)
     df.to_parquet("test.parquet", index=False)
 
 
-stats_df = pd.DataFrame(columns=["time(s)", "memory(KB)"])
+stats_df = pd.DataFrame(columns=["time(ms)", "memory(KB)", "dtypes"])
 
 
 def profile(func):
@@ -89,7 +88,8 @@ def profile(func):
             param += "," + ",".join([f"{k}={v}" for k, v in kwargs.items()])
         memory = df.memory_usage(index=False, deep=True).sum() / 1024
         idx = f"{func.__name__}({param})"
-        stats_df.loc[idx] = [total_time, memory]
+        dtypes = ",".join([f"{k}({v})" for k, v in df.dtypes.value_counts().items()])
+        stats_df.loc[idx] = [np.round(total_time * 1000, 3), np.round(memory, 3), dtypes]
         return df
 
     return inner
@@ -97,13 +97,13 @@ def profile(func):
 
 @profile
 def read_csv_by_python():
-    df = pd.read_csv("test.csv", sep="\t", engine="python")
+    df = pd.read_csv("test.csv", engine="python")
     return df
 
 
 @profile
 def read_csv_by_pyarrow():
-    df = pd.read_csv("test.csv", sep="\t", engine="pyarrow", dtype_backend="pyarrow")
+    df = pd.read_csv("test.csv", engine="pyarrow", dtype_backend="pyarrow")
     return df
 
 
@@ -123,6 +123,7 @@ if __name__ == '__main__':
     pd.set_option("display.max_columns", None)
     pd.set_option("display.max_rows", None)
     pd.set_option("display.width", 1000)
+    pd.set_option("display.max_colwidth", 2000)
     generate_test_data(force=False)
     read_csv_by_python()
     read_csv_by_pyarrow()
