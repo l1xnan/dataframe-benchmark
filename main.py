@@ -1,11 +1,13 @@
 import os
+import time
+from functools import wraps
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import psutil
 from faker import Faker
-from memory_profiler import profile
 
 
 def process_memory():
@@ -22,7 +24,6 @@ def process_cpu():
     return cpu_usage
 
 
-# decorator function mem
 def profile_mem(func):
     def wrapper(*args, **kwargs):
         mem_before = process_memory()
@@ -48,7 +49,7 @@ def profile_cpu(func):
     return wrapper
 
 
-def generate_test_data(size=100000, force=False):
+def generate_test_data(size=1000000, force=False):
     if Path("test.csv").exists() and not force:
         return
     fake = Faker()
@@ -69,48 +70,75 @@ def generate_test_data(size=100000, force=False):
         })
 
     df = pd.DataFrame.from_records(data)
-    df.to_csv("test.csv", index=False, sep="\t")
+    df.to_csv("test.csv", index=False)
     df.to_parquet("test.parquet", index=False)
 
 
-@profile_cpu
-@profile_mem
+stats_df = pd.DataFrame(columns=["time(ms)", "memory(KB)", "dtypes"])
+
+
+def profile(func):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        start_time = time.perf_counter()
+        df = func(*args, **kwargs)
+        end_time = time.perf_counter()
+        total_time = end_time - start_time
+        param = ",".join(args)
+        if kwargs:
+            param += "," + ",".join([f"{k}={v}" for k, v in kwargs.items()])
+        if isinstance(df, pl.DataFrame):
+            memory = "-"  # df.estimated_size("kb")
+            dtypes = "-"
+        else:
+            memory = np.round(df.memory_usage(index=False, deep=True).sum() / 1024, 3)
+            dtypes = ",".join([f"{k}({v})" for k, v in df.dtypes.value_counts().items()])
+        idx = f"{func.__name__}({param})"
+        stats_df.loc[idx] = [np.round(total_time * 1000, 3), memory, dtypes]
+        return df
+
+    return inner
+
+
 @profile
 def read_csv_by_python():
-    df = pd.read_csv("test.csv", sep="\t", engine="python")
-    df.info(memory_usage="deep", verbose=False)
+    df = pd.read_csv("test.csv", engine="python")
+    return df
 
 
-@profile_cpu
-@profile_mem
 @profile
 def read_csv_by_pyarrow():
-    df = pd.read_csv("test.csv", sep="\t", engine="pyarrow", dtype_backend="pyarrow")
-    df.info(memory_usage="deep", verbose=False)
+    df = pd.read_csv("test.csv", engine="pyarrow", dtype_backend="pyarrow")
+    return df
 
 
-@profile_cpu
-@profile_mem
 @profile
 def read_parquet_by_default():
     df = pd.read_parquet("test.parquet")
-    df.info(memory_usage="deep", verbose=False)
+    return df
 
 
-@profile_cpu
-@profile_mem
 @profile
 def read_parquet_by_pyarrow():
     df = pd.read_parquet("test.parquet", engine="pyarrow", dtype_backend="pyarrow")
-    df.info(memory_usage="deep", verbose=False)
+    return df
+
+
+@profile
+def read_csv_by_polars():
+    df = pl.read_csv("test.csv", use_pyarrow=True)
+    return df
 
 
 if __name__ == '__main__':
+    pd.set_option("display.max_columns", None)
+    pd.set_option("display.max_rows", None)
+    pd.set_option("display.width", 1000)
+    pd.set_option("display.max_colwidth", 30)
     generate_test_data(force=False)
     read_csv_by_python()
-    print("=" * 30)
     read_csv_by_pyarrow()
-    print("=" * 30)
     read_parquet_by_default()
-    print("=" * 30)
     read_parquet_by_pyarrow()
+    read_csv_by_polars()
+    print(stats_df)
