@@ -1,6 +1,8 @@
 """
 https://arrow.apache.org/docs/python/api/datatypes.html
 """
+import random
+
 import numpy as np
 import pandas as pd
 from faker import Faker
@@ -15,7 +17,7 @@ def print_mem(s: pd.Series):
 
 
 def benchmark():
-    s = pd.Series([np.random.randint(-128, 127) for _ in range(SIZE)])
+    s = pd.Series([random.randint(-128, 127) for _ in range(SIZE)])
     print_mem(s)
     print_mem(s.astype(np.int8))
     print_mem(s.astype("int8[pyarrow]"))
