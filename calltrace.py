@@ -1,5 +1,18 @@
+import inspect
 import sys
 from collections import defaultdict
+from dataclasses import dataclass
+from inspect import FrameInfo
+
+
+@dataclass(unsafe_hash=True)
+class CallInfo:
+    frame: FrameInfo
+    info: None
+    stack: None
+    trace: None
+    current: None
+    arg: None
 
 
 class FileFilter:
@@ -16,6 +29,7 @@ class CallTrace:
     def __init__(self):
         self.stack_level = 0
         self.call_events = defaultdict(int)
+        self.call_infos = []
         self.filter = None
 
     def __call__(self, frame, event, arg):
@@ -44,7 +58,16 @@ class CallTrace:
                 frame_back.f_code.co_filename,
                 frame_back.f_lineno,
             )
-
+            if txt not in self.call_events:
+                call_info = CallInfo(
+                    frame=frame,
+                    info=inspect.getframeinfo(frame),
+                    trace=inspect.trace(),
+                    stack=inspect.stack(),
+                    current=inspect.currentframe(),
+                    arg=arg,
+                )
+                self.call_infos.append(call_info)
             self.call_events[txt] += 1
 
         elif event == "return":
@@ -59,7 +82,6 @@ class CallTrace:
         sys.setprofile(self)
 
     def output(self):
-
         for txt, i in self.call_events.items():
             if i > 1:
                 print(f"{txt}({i})")

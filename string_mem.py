@@ -22,10 +22,6 @@ print_mem("string", standard_dtype)
 arrow_dtype = pd.Series(strings, dtype="string[pyarrow]")
 print_mem("arrow", arrow_dtype)
 
-import random
-
-import pandas as pd
-
 
 def print_mem(s: pd.Series):
     print(str(s.dtype), str(round(s.memory_usage(deep=True) / 1024 ** 2, 2)).rjust(6, " ") + " MB", sep="\t")
