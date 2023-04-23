@@ -1,4 +1,5 @@
 import sys
+from collections import defaultdict
 
 
 class FileFilter:
@@ -14,14 +15,12 @@ class FileFilter:
 class CallTrace:
     def __init__(self):
         self.stack_level = 0
-        self.call_events = []
+        self.call_events = defaultdict(int)
         self.filter = None
 
     def __call__(self, frame, event, arg):
         if event == "call":
             self.stack_level += 1
-
-            unique_id = frame.f_code.co_filename + str(frame.f_lineno)
 
             # Part of filename MUST be in white list.
             if "self" in frame.f_locals:
@@ -38,7 +37,7 @@ class CallTrace:
                 return
 
             frame_back = frame.f_back  # 获取调用函数时的信息
-            txt = "{: <40} # {}, {}, {}, {}".format(
+            txt = "{: <40} # {}:{}, {}:{}".format(
                 func_name,
                 frame.f_code.co_filename,
                 frame.f_lineno,
@@ -46,7 +45,7 @@ class CallTrace:
                 frame_back.f_lineno,
             )
 
-            self.call_events.append(txt)
+            self.call_events[txt] += 1
 
         elif event == "return":
             self.stack_level -= 1
@@ -60,9 +59,12 @@ class CallTrace:
         sys.setprofile(self)
 
     def output(self):
-        for text in self.call_events:
-            print(text)
 
+        for txt, i in self.call_events.items():
+            if i > 1:
+                print(f"{txt}({i})")
+            else:
+                print(txt)
         self.call_events.clear()
 
     def stop(self):

@@ -2,6 +2,7 @@ from calltrace import CallTrace
 
 
 def func1():
+    _ = sorted([i for i in range(100)], key=lambda i: i)
     print('ok')
 
 
@@ -19,7 +20,8 @@ def func3():
 
 def func4():
     func3()
-    func5()
+    for i in range(5):
+        func5()
 
 
 def file_filter(filename):
